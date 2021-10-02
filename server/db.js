@@ -9,12 +9,14 @@ const createTables = async conn => {
         let sql = await readFile(sqlPath, 'utf-8')
         await conn.query(sql)
     }
-    // const createDefinitionsSql = await readFile('./sql/definition/up.sql', 'utf-8')
-    // await conn.query(createDefinitionsSql)
     await Promise.all([
+        readThenCreate('./sql/clusters/up.sql'),
         readThenCreate('./sql/definitions/up.sql'),
+        readThenCreate('./sql/examples/up.sql'),
+        readThenCreate('./sql/languages/up.sql'),
+        readThenCreate('./sql/searchKeys/up.sql'),
         readThenCreate('./sql/translations/up.sql'),
-        readThenCreate('./sql/clusters/up.sql')
+        readThenCreate('./sql/wordGroups/up.sql')
     ])
 }
 

@@ -1,4 +1,4 @@
-const defintionGroupsRow = {
+const wordGroupsRow = {
     type: 'object',
     properties: {
         id: { type: 'number' },
@@ -30,7 +30,7 @@ const searchKeysRow = {
     properties: {
         id: { type: 'number' },
         definitionId: { type: 'number' },
-        key: { type: 'string' }
+        searchKey: { type: 'string' }
     }
 }
 
@@ -49,7 +49,7 @@ const definitionsRow = {
     type: 'object',
     properties: {
         id: { type: 'number' },
-        groupId: { type: 'number' },
+        wordGroupId: { type: 'number' },
         clusterId: { type: 'number' },
         pronounciation: { type: 'string' },
         word: { type: 'string' },
@@ -79,7 +79,7 @@ const definitionSchema = {
     type: 'object',
     properties: {
         definition: definitionsRow,
-        group: defintionGroupsRow,
+        wordGroup: wordGroupsRow,
         translations: { type: 'array', items: translationSchema },
         searchKeys: { type: 'array', items: searchKeysRow },
         examples: { type: 'array', items: examplesRow }
