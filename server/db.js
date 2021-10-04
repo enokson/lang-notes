@@ -2,8 +2,6 @@ const { promises } = require('fs')
 // const { join } from 'path'
 const { readFile } = promises
 
-
-
 const createTables = async conn => {
     const readThenCreate = async sqlPath => {
         let sql = await readFile(sqlPath, 'utf-8')
