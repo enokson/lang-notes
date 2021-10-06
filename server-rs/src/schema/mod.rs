@@ -293,7 +293,7 @@ pub mod clusters {
     }
 
     pub fn insert_cluster_row(db: &mut Db) -> Result<u32, String> {
-        let sql = include_str!("./sql/cluster/insert.sql");
+        let sql = include_str!("./sql/clusters/insert.sql");
         match db.query(sql, &[]) {
             Ok(rows) => match rows.get(0) { // get the first row
                 Some(row) => match row.try_get(0) { // get the first value, which should be the id
