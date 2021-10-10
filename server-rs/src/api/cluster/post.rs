@@ -1,3 +1,4 @@
+
 use actix_web::{
     web::{
         Data,
@@ -5,11 +6,19 @@ use actix_web::{
     },
     HttpResponse
 };
-use serde::{Serialize};
+use serde::{ Deserialize, Serialize};
 use super::super::super::{
     AppData,
-    schema::{ get_db, clusters}
+    schema::{ 
+        get_db, 
+        clusters
+    }
 };
+
+#[derive(Debug, Deserialize)]
+pub struct Body {
+    
+}
 
 #[derive(Debug, Serialize)]
 pub enum Reply {
@@ -23,13 +32,14 @@ pub fn post(data: Data<AppData>, cluster: Json<clusters::NewCluster>) -> HttpRes
             Ok(db) => Ok(db),
             Err(_) => Err(HttpResponse::InternalServerError().json(Reply::Err{ error: "internal server error".to_string() }))
         }?;
-        let cluster_id = {
-            match clusters::insert_cluster_row(&mut db) {
+        let id = {
+            match data.clusters.insert_one(&mut db, &vec![]) {
                 Ok(id) => Ok(id),
                 Err(error) => Err(HttpResponse::InternalServerError().json(Reply::Err{ error }))
             }
         }?;
-        Ok(HttpResponse::Ok().json(Reply::Ok{ id: 1 }))
+        // TODO: insert remaining data fields
+        Ok(HttpResponse::Ok().json(Reply::Ok{ id }))
     };
     match get_reply() {
         Ok(reply) => reply,
