@@ -1,9 +1,228 @@
-use postgres::{ Client, Row };
+use postgres::{Client, Row, types::FromSql};
 use serde::{Deserialize, Serialize};
-use std::{ 
-    sync::{ Mutex, MutexGuard },
+use std::{
+    marker::{ Copy, PhantomData},
+    sync::{ Mutex, MutexGuard }
 };
+
+pub mod clusters;
+pub mod definitions;
+pub mod examples;
+pub mod languages;
+pub mod translations;
+pub mod word_groups;
+
 type Db<'a> = MutexGuard<'a, Client>;
+
+pub trait Valuable: Clone {
+    fn get_value(&self) -> String;
+}
+
+pub trait Columnist<V: Valuable>: Copy {
+    fn get_key(&self) -> String;
+    fn get_value_from_row(&self, row: &Row) -> Result<V, String>;
+}
+
+pub struct KV<K: Columnist<V>, V: Valuable>(K, V);
+impl<K: Columnist<V>, V: Valuable> KV<K, V> {
+    pub fn new(k: K, v: V) -> KV<K, V> {
+        KV(k, v)
+    }
+    pub fn get_kv_str_pair(&self) -> (String, String) {
+        (self.0.get_key(), self.1.get_value())
+    }
+    pub fn get_key_values_for_insert(key_values: &Vec<KV<K, V>>) -> (String, String) {
+        let mut keys = vec![];
+        let mut values = vec![];
+        for kv in key_values.iter() {
+            keys.push(kv.get_key());
+            values.push(kv.get_value());
+        }
+        (keys.join(","), values.join(","))
+    }
+    pub fn get_key(&self) -> String {
+        self.0.get_key()
+    }
+    pub fn get_value(&self) -> String {
+        self.1.get_value()
+    }
+    pub fn get_kv_from_row(k: K, v: &Row) -> Result<KV<K, V>, String> {
+        Ok(KV(k, K::get_value_from_row(&k, v)?))
+    }
+}
+
+pub enum Condition<K: Columnist<V>, V: Valuable> {
+    Eq(KV<K, V>),
+    Gt(KV<K, V>),
+    Lt(KV<K, V>),
+    Gte(KV<K, V>),
+    Lte(KV<K, V>),
+    Ne(KV<K, V>),
+    And(Vec<Condition<K, V>>),
+    Or(Vec<Condition<K, V>>)
+}
+impl<K: Columnist<V>, V: Valuable> Condition<K, V> {
+    fn map_condition(conditions: &Vec<Self>) -> Vec<String> {
+        conditions
+            .iter()
+            .map(|condition| condition.to_sql())
+            .collect::<Vec<String>>()
+    }
+    fn group(join: &str, conditions: &Vec<Self>) -> String {
+        format!("({})", Condition::map_condition(conditions).join(&format!(" {} ", join)))
+    }
+    pub fn to_sql(&self) -> String {
+        match &self {
+            Self::Eq(kv) => format!("{} = {}", kv.get_key(), kv.get_value()),
+            Self::Gt(kv)  => format!("{} > {}", kv.get_key(), kv.get_value()),
+            Self::Lt(kv)  => format!("{} < {}", kv.get_key(), kv.get_value()),
+            Self::Gte(kv)  => format!("{} >= {}", kv.get_key(), kv.get_value()),
+            Self::Lte(kv)  => format!("{} <= {}", kv.get_key(), kv.get_value()),
+            Self::Ne(kv)  => format!("{} <> {}", kv.get_key(), kv.get_value()),
+            Self::And(conditions) => Condition::group("and", conditions),
+            Self::Or(conditions) => Condition::group("or", conditions)            
+        }
+    }
+}
+pub struct Conditions<K: Columnist<V>, V: Valuable>(Vec<Condition<K, V>>);
+impl<K: Columnist<V>, V: Valuable> Conditions<K, V> {
+    pub fn get_where(&self) -> String {
+        let conditions = self.0.iter().map(|condition| condition.to_sql()).collect::<Vec<String>>().join(" ");
+        format!("where {}", conditions)
+    }
+    pub fn get_set(&self) -> String {
+        self.0
+            .iter()
+            .map(|condition| { 
+                format!("set {}", condition.to_sql())
+            })
+            .collect::<Vec<String>>()
+            .join(", ")
+    }
+}
+
+pub trait FromSchema {
+    type Column;
+    fn to_vec(&self) -> Vec<Self::Column>;
+}
+
+#[derive(Debug, Clone)]
+pub enum Projection<K: Columnist<V>, V: Valuable> {
+    Some(Vec<K>),
+    All(Vec<K>),
+    PhantomData(PhantomData<V>)
+}
+
+pub struct FindOpts<K: Columnist<V>, V: Valuable> {
+    filter: Conditions<K, V>,
+    projection: Projection<K, V>,
+    limit: Option<u32>
+}
+
+pub struct Table<K: Columnist<V>, V: Valuable> {
+    name: String,
+    key_type: PhantomData<K>,
+    value_type: PhantomData<V>
+}
+impl<K: Columnist<V>, V: Valuable> Table<K, V> {
+
+    pub fn new(name: &str) -> Table<K, V> {
+        Table { 
+            name: name.to_string(), 
+            key_type: PhantomData, 
+            value_type: PhantomData
+        }
+    }
+
+    fn get_insert_string(&self, columns: &Vec<KV<K, V>>) -> String {
+        let (keys, values) = KV::get_key_values_for_insert(&columns);
+        format!("insert into {} ({}) values ({}) returning id;", &self.name, keys, values)
+    }
+    
+    pub fn insert_one(&self, db: &mut Db, columns: &Vec<KV<K, V>>) -> Result<u32, String> {
+        let sql = self.get_insert_string(columns);
+        match db.query(sql.as_str(), &[ ]) {
+            Ok(rows) => get_id(&rows),
+            Err(error) => Err(error.to_string())
+        }
+    }
+    
+    pub fn insert_many(&self, db: &mut Db, rows: &Vec<Vec<KV<K, V>>>) -> Vec<Result<u32, String>> {
+        let mut ids: Vec<Result<u32, String>> = vec![];
+        for row in rows.iter() {
+            ids.push(self.insert_one(db, row));
+        }
+        ids
+    }
+    
+    fn get_update_string(&self, filter: &Conditions<K, V>, updates: &Conditions<K, V>) -> String {
+        format!("update {} {} {}", &self.name, filter.get_where(), updates.get_set())
+    }
+    
+    pub fn update(&self, db: &mut Db, filter: &Conditions<K, V>, updates: &Conditions<K, V>) -> Result<(), String> {
+        let sql = self.get_update_string(filter, updates);
+        match db.query(sql.as_str(), &[ ]) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(error.to_string())
+        }
+    }
+    
+    pub fn delete(&self, db: &mut Db, filter: &Conditions<K, V>) -> Result<(), String> {
+        let sql = format!("delete from {} {}", &self.name, filter.get_where());
+        match db.query(sql.as_str(), &[]) {
+            Ok(_) => Ok(()),
+            Err(error) => Err(error.to_string())
+        }
+    }
+
+    pub fn get_find_sql(&self, options: &FindOpts<K, V>) -> String {
+    
+        let projection_str = {
+            match &options.projection {
+                Projection::Some(keys) => keys.iter().map(|key| key.get_key()).collect::<Vec<String>>().join(","),
+                Projection::All(_keys) => "*".to_string(),
+                Projection::PhantomData(_) => "*".to_string()
+            }
+        };
+        let filter_str = options.filter.get_where();
+        let limit_str = {
+            if let Some(limit) = options.limit {
+                format!("limit {}", limit)
+            } else {
+                "".to_string()
+            }
+        };
+        format!("select ({}) from {} {}{}", projection_str, &self.name, filter_str, limit_str)
+    }
+    
+    pub fn find(&self, db: &mut Db, options: &FindOpts<K, V>) -> Result<Vec<Vec<V>>, String> {
+        let sql = self.get_find_sql(options);
+        let column_list: Vec<K> = {
+            match &options.projection {
+                Projection::All(keys) => {
+                    keys.iter().map(|k| k.clone()).collect::<Vec<K>>()
+                },
+                Projection::Some(keys) => keys.iter().map(|k| k.clone()).collect::<Vec<K>>(),
+                Projection::PhantomData(_) => vec![]
+            }
+        };
+        match db.query(sql.as_str(), &[]) {
+            Ok(rows) => {
+                rows.iter().map(|row| -> Result<Vec<V>, String> {
+                    let mut key_values: Vec<V> = vec![];
+                    for k in column_list.iter() {
+                        key_values.push(k.get_value_from_row(row)?)
+                    }
+                    Ok(key_values)
+                })
+                .collect::<Result<Vec<Vec<V>>, String>>()?;
+                Ok(vec![])
+            },
+            Err(error) => Err(error.to_string())
+        }
+    }
+    
+}
 
 pub fn get_db<'a>(db: &'a Mutex<Client>) -> Result<Db<'a>, String> {
     match db.try_lock() {
@@ -12,297 +231,42 @@ pub fn get_db<'a>(db: &'a Mutex<Client>) -> Result<Db<'a>, String> {
     }
 }
 
-pub fn get_id(rows: Vec<Row>) -> Result<u32, String> {
+pub fn get_value_from_row<'a, T: FromSql<'a>>(row: &'a Row, column: &str) -> Result<T, String> {
+    match row.try_get(column) {
+        Ok(v) => Ok(v),
+        Err(error) => Err(error.to_string())
+    }
+}
+
+pub fn get_id_from_row(row: &Row) -> Result<u32, String> {
+    get_value_from_row(row, "id")
+}
+
+pub fn get_id(rows: &Vec<Row>) -> Result<u32, String> {
     match rows.get(0) {
-        Some(row) => match row.try_get(0) {
-            Ok(id) => Ok(id),
-            Err(error) => Err(error.to_string())
-        },
+        Some(row) => get_id_from_row(row),
         None => Err("Could not get id. Could not find row.".to_string())
     }
 }
 
-pub mod words_group {
-    use super::{Db, get_id, Deserialize, Serialize};
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        pub id: u32,
-        pub name: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewRow {
-        pub name: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub enum NewDefinition {
-        New { name: String },
-        Existing { id: u32 }
-    }
-
-    pub fn insert_row(db: &mut Db, new_row: &NewRow) -> Result<u32, String> {
-        let sql = include_str!("sql/word_groups/insert.sql");
-        match db.query(sql, &[&new_row.name]) {
-            Ok(rows) => get_id(rows),
-            Err(error) => Err(error.to_string())
-        }
-    }
-
+pub fn escape(str: &str) -> String {
+    format!("'{}'", str.replace("'", "''"))
 }
 
-pub mod languages {
-    use super::{Db, get_id, Deserialize, Serialize};
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        pub id: u32,
-        pub name: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewRow {
-        pub name: String
-    }
-
-    pub fn insert_row(db: &mut Db, new_row: &NewRow) -> Result<u32, String> {
-        let sql = include_str!("sql/languages/insert.sql");
-        match db.query(sql, &[&new_row.name]) {
-            Ok(rows) => get_id(rows),
-            Err(error) => Err(error.to_string())
-        }
-    }
-
-}
-
-pub mod translations {
-
-    use super::{
-        Db, get_id,
-        Deserialize, Serialize,
-        examples
-    };
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        pub id: u32,
-        pub lang_id: u32,
-        pub definition: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewRow {
-        pub lang_id: u32,
-        pub definition: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Translation {
-        pub value: Row,
-        pub examples: Vec<examples::Row>
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewTranslation {
-        pub value: NewRow,
-        pub examples: Vec<examples::NewRow>
-    }
-
-    pub fn insert_translation_row(db: &mut Db, data: &NewRow) -> Result<u32, String> {
-        let sql = include_str!("sql/translations/insert.sql");
-        match db.query(sql, &[ &data.lang_id, &data.definition ]) {
-            Ok(rows) => get_id(rows),
-            Err(error) => Err(error.to_string())
-        }
-    }
-
-    pub fn insert_translation(db: &mut Db, data: &NewTranslation) -> Result<u32, String> {
-        let id = insert_translation_row(db, &data.value)?;
-        data
-            .examples
+pub fn create_table<K: Columnist<V>, V: Valuable>(db: &mut Db, name: &str, columns: Vec<(K, &str)>) -> Result<(), String> {
+    let sql = format!(
+        "create table if not exists {} ({})",
+        name,
+        columns
             .iter()
-            .map(|new_example| examples::insert_row(db, new_example))
-            .collect::<Result<Vec<u32>, String>>()?;
-        Ok(id)
-    }
-
-}
-
-pub mod examples {
-    use super::{ Db, get_id, Deserialize, Serialize };
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub enum ParentType {
-        Definition,
-        Translation
-    }
-    impl ParentType {
-        pub fn to_int(&self) -> u32 {
-            match self {
-                ParentType::Definition => 1,
-                ParentType::Translation => 2
-            }
-        }
-        pub fn from_int(int: &u32) -> Result<ParentType, String> {
-            match int {
-                1 => Ok(ParentType::Definition),
-                2 => Ok(ParentType::Translation),
-                _ => Err("Could not parse int into example parent type.".to_string())
-            }
-        }
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        pub id: u32,
-        pub parent_type: u32,
-        pub parent_id: u32,
-        pub example: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewRow {
-        pub parent_type: ParentType,
-        pub parent_id: u32,
-        pub example: String
-    }
-
-    pub fn insert_row(db: &mut Db, data: &NewRow) -> Result<u32, String> {
-        let sql = include_str!("sql/examples/insert.sql");
-        match db.query(sql, &[&data.parent_type.to_int(), &data.parent_id, &data.example]) {
-            Ok(rows) => get_id(rows),
-            Err(error) => Err(error.to_string())
-        }
-    }
-
-}
-
-pub mod definitions {
-    use super::{
-        Db, get_id,
-        Deserialize, Serialize,
-        examples,
-        translations,
-        words_group
-    };
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        pub id: u32,
-        pub word_group_id: u32,
-        pub cluster_id: u32,
-        pub pronounciation: Option<String>,
-        pub word: String,
-        pub prefixes: Option<String>,
-        pub uffixes: Option<String>,
-        pub definition: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewRow {
-        pub words_group_id: words_group::NewDefinition,
-        pub cluster_id: u32,
-        pub pronounciation: Option<String>,
-        pub word: String,
-        pub prefixes: Option<String>,
-        pub suffixes: Option<String>,
-        pub definition: String
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Definition {
-        pub value: Row,
-        pub word_group: words_group::Row,
-        pub translations: Vec<translations::Translation>,
-        pub examples: Vec<examples::Row>
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewDefinition {
-        pub value: NewRow,
-        pub translations: Option<Vec<translations::NewTranslation>>,
-        pub examples: Option<Vec<examples::NewRow>>
-    }
-
-    pub fn insert_row(db: &mut Db, data: &NewRow) -> Result<u32, String> {
-        let sql = include_str!("sql/definitions/insert.sql");
-        let word_group_id = {
-            match &data.words_group_id {
-                words_group::NewDefinition::New { name } => words_group::insert_row(db, &words_group::NewRow { name: name.to_string() }),
-                words_group::NewDefinition::Existing { id } => Ok(id.to_owned())
-            }
-        }?;
-
-        match db.query(
-            sql, 
-            &[
-                &word_group_id,
-                &data.cluster_id,
-                &data.pronounciation,
-                &data.word,
-                &data.prefixes,
-                &data.suffixes,
-                &data.definition
-            ]) {
-                Ok(rows) => get_id(rows),
-                Err(error) => Err(error.to_string())
-            }
-    }
-
-    pub fn insert_definition(db: &mut Db, data: &NewDefinition) -> Result<u32, String> {
-        let def_id = insert_row(db, &data.value)?;
-        if let Some(translation_vec) = &data.translations {
-            translation_vec
-                .iter()
-                .map(|new_translation| translations::insert_translation(db, new_translation))
-                .collect::<Result<Vec<u32>, String>>()?;
-        }
-        if let Some(example_vec) = &data.examples {
-            example_vec
-                .iter()
-                .map(|new_example| examples::insert_row(db, new_example))
-                .collect::<Result<Vec<u32>, String>>()?;
-        }
-        Ok(def_id)
-    }
-
-}
-
-pub mod clusters {
-    use super::{
-        Db,
-        Deserialize, Serialize,
-        definitions::{Definition, NewDefinition}
-    };
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Row {
-        id: u32
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct Cluster {
-        cluster: Row,
-        definition: Vec<Definition>
-    }
-
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct NewCluster {
-        definitions: Option<Vec<NewDefinition>>
-    }
-
-    pub fn insert_cluster_row(db: &mut Db) -> Result<u32, String> {
-        let sql = include_str!("./sql/clusters/insert.sql");
-        match db.query(sql, &[]) {
-            Ok(rows) => match rows.get(0) { // get the first row
-                Some(row) => match row.try_get(0) { // get the first value, which should be the id
-                    Ok(id) => Ok(id),
-                    Err(error) => Err(error.to_string())
-                },
-                None => Err("Could not return id after insert. No rows returned.".to_string())
-            },
-            Err(error) => Err(error.to_string())
-        }
+            .map(|(col, params)| format!("{} {}", col.get_key(), params))
+            .collect::<Vec<String>>()
+            .join(",")
+    );
+    match db.query(sql.as_str(), &[]) {
+        Ok(_rows) => Ok(()),
+        Err(error) => Err(error.to_string())
     }
 }
+
+pub fn set_as_null() -> String { "null".to_string() }
