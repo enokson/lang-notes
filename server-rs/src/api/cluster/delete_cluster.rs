@@ -16,7 +16,7 @@ pub struct Info {
     id: i32
 }
 
-pub fn delete_lang(data: Data<AppData>, id: &i32) -> Result<(), String> {
+pub fn delete_cluster(data: Data<AppData>, id: &i32) -> Result<(), String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indxer = ParamIndexer::new();
     let sql = vec![
@@ -30,7 +30,7 @@ pub fn delete_lang(data: Data<AppData>, id: &i32) -> Result<(), String> {
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_lang(data, &info.id)) {
+    match error_msg!(delete_cluster(data, &info.id)) {
         Ok(_) => {
             return HttpResponse::Ok().finish();
         },
