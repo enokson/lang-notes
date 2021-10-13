@@ -1,45 +1,26 @@
-use super::{ Db, get_id, Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
-pub enum ParentType {
-    Definition,
-    Translation
-}
-impl ParentType {
-    pub fn to_int(&self) -> u32 {
-        match self {
-            ParentType::Definition => 1,
-            ParentType::Translation => 2
-        }
-    }
-    pub fn from_int(int: &u32) -> Result<ParentType, String> {
-        match int {
-            1 => Ok(ParentType::Definition),
-            2 => Ok(ParentType::Translation),
-            _ => Err("Could not parse int into example parent type.".to_string())
-        }
-    }
+pub mod table {
+    pub const TABLE_NAME: &'static str = "examples";
+    pub const ID: &'static str = "id";
+    pub const PARENT_ID: &'static str = "parent_id";
+    pub const PARENT_TYPE: &'static str = "parent_type";
+    pub const EXAMPLE: &'static str = "example";
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
-    pub id: u32,
-    pub parent_type: u32,
-    pub parent_id: u32,
+    pub id: i32,
+    pub parent_type: i32,
+    pub parent_id: i32,
     pub example: String
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct NewRow {
-    pub parent_type: ParentType,
-    pub parent_id: u32,
+#[serde(rename_all = "camelCase")]
+pub struct RowI {
+    pub parent_type: i32,
+    pub parent_id: i32,
     pub example: String
-}
-
-pub fn insert_row(db: &mut Db, data: &NewRow) -> Result<u32, String> {
-    let sql = include_str!("sql/examples/insert.sql");
-    match db.query(sql, &[&data.parent_type.to_int(), &data.parent_id, &data.example]) {
-        Ok(rows) => get_id(&rows),
-        Err(error) => Err(error.to_string())
-    }
 }

@@ -1,54 +1,34 @@
 use super::*;
 
-use definitions::{
-    Definition,
-    NewDefinition
+use crate::{
+    schema::{
+        Int,
+        definitions::{
+            Row as DefinitionRow,
+            RowI as DefinitionRowI
+        }
+    }
 };
+
+pub mod table {
+    pub const TABLE_NAME: &'static str = "clusters";
+    pub const ID: &'static str = "id";
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Row {
-    id: u32
+    id: Int
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Cluster {
     cluster: Row,
-    definition: Vec<Definition>
+    definition: Vec<DefinitionRow>
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct NewCluster {
-    definitions: Option<Vec<NewDefinition>>
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum K {
-    Id
-}
-impl Columnist<V> for K {
-    fn get_key(&self) -> String {
-        match &self {
-            Self::Id => format!("id")
-        }
-    }
-    fn get_value_from_row(&self, row: &postgres::Row) -> Result<V, String> {
-        match &self {
-            Self::Id => Ok(V::Id(get_value_from_row(row, &self.get_key())?))
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum V {
-    Id(u32)
-}
-
-impl Valuable for V {
-    fn get_value(&self) -> String {
-        match &self {
-            Self::Id(id) => format!("{}", id)
-        }
-    }
+pub struct ClusterI {
+    definitions: Vec<DefinitionRowI>
 }
 
 pub struct Filter {
