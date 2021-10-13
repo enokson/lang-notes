@@ -1,4 +1,5 @@
-use super::*;
+use crate::schema::Int;
+use serde::{Deserialize, Serialize};
 
 pub mod table {
     pub const TABLE_NAME: &'static str = "languages";
@@ -8,7 +9,7 @@ pub mod table {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Row {
-    pub id: u32,
+    pub id: Int,
     pub name: String
 }
 
