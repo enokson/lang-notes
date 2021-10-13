@@ -28,7 +28,6 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(move || {
         App::new()
-            // .data(data.clone())
             .service(
                 web::scope("/api")
                     .app_data(data.clone())
@@ -61,8 +60,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/words_group", web::post().to(api::words_group::post_words_group::post))
                     .route("/words_group", web::get().to(api::words_group::get_words_group::get))
                     .route("/words_group", web::put().to(api::words_group::update_words_group::update))
-                    .route("/words_group", web::delete().to(api::words_group::delete_words_group::delete))
-                    
+                    .route("/words_group", web::delete().to(api::words_group::delete_words_group::delete))                    
 
             )
     })
