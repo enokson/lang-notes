@@ -1,4 +1,5 @@
-use super::*;
+use crate::schema::Int;
+use serde::{Deserialize, Serialize};
 
 pub mod table {
     pub const TABLE_NAME: &'static str = "word_groups";
@@ -8,7 +9,7 @@ pub mod table {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Row {
-    pub id: u32,
+    pub id: Int,
     pub name: String
 }
 
@@ -20,5 +21,5 @@ pub struct RowI {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum NewDefinition {
     New { name: String },
-    Existing { id: u32 }
+    Existing { id: Int }
 }
