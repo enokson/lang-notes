@@ -1,1 +1,0 @@
-insert into clusters () values () returning id;
