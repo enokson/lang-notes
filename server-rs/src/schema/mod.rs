@@ -10,7 +10,7 @@ pub mod translations;
 pub mod word_groups;
 
 type Db<'a> = MutexGuard<'a, Client>;
-type Int = i32;
+pub type Int = i32;
 
 pub struct ParamIndexer {
     count: u8

@@ -7,6 +7,8 @@ pub mod table {
     pub const PARENT_ID: &'static str = "parent_id";
     pub const PARENT_TYPE: &'static str = "parent_type";
     pub const EXAMPLE: &'static str = "example";
+    pub const PARENT_TYPE_DEFINITION: &'static i32 = &1;
+    pub const PARENT_TYPE_TRANSLATION: &'static i32 = &2;
 }
 
 #[derive(Debug, Deserialize, Serialize)]

@@ -11,6 +11,7 @@ use crate::{
         ParamIndexer
     },
 };
+use postgres::Row as PostgresRow;
 
 #[derive(Debug, Deserialize)]
 pub struct Info {
@@ -28,7 +29,16 @@ pub enum Reply {
     }
 }
 
-pub fn get_lang(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
+pub fn get_translation_from_row(row: &PostgresRow) -> Result<Row, String> {
+    Ok(Row {
+        id: error_msg!(row.try_get(table::ID))?,
+        lang_id: error_msg!(row.try_get(table::LANG_ID))?,
+        definition_id: error_msg!(row.try_get(table::DEFINITION_ID))?,
+        definition: error_msg!(row.try_get(table::DEFINITION))?
+    })
+}
+
+pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -40,11 +50,7 @@ pub fn get_lang(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
     let example: Option<Row> = match error_msg!(db.query(sql.as_str(), &[id])) {
         Ok(rows) => match rows.get(0) {
             Some(row) => {
-                Some(Row {
-                    id: error_msg!(row.try_get(table::ID))?,
-                    lang_id: error_msg!(row.try_get(table::LANG_ID))?,
-                    definition: error_msg!(row.try_get(table::DEFINITION))?
-                })
+                Some(error_msg!(get_translation_from_row(row))?)
             },
             None => {
                 return Err(format!("{}::{} Could not find row", file!(), line!()));
@@ -58,7 +64,7 @@ pub fn get_lang(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_lang(data, &info.id)) {
+    match error_msg!(get_translation(&data, &info.id)) {
         Ok(example) => {
             return HttpResponse::Ok().json(Reply::Ok{ example });
         },

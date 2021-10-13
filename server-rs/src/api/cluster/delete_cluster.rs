@@ -1,11 +1,20 @@
 use actix_web::web::{Data, HttpResponse, Query};
 use serde::Deserialize;
 use crate::{
-    AppData, 
+    AppData,
+    api::{
+        definition::{
+            delete_definition::delete_definition,
+            get_definition::get_definition_from_row
+        }
+    },
     schema::{
         ParamIndexer,
-        languages::{
+        clusters::{
             table
+        },
+        definitions::{
+            table as definitions_table
         }
     },
     error_msg
@@ -16,8 +25,27 @@ pub struct Info {
     id: i32
 }
 
-pub fn delete_cluster(data: Data<AppData>, id: &i32) -> Result<(), String> {
+pub fn delete_cluster(data: &Data<AppData>, id: &i32) -> Result<(), String> {
     let mut db = error_msg!(data.db.try_lock())?;
+    {
+        let mut indexer = ParamIndexer::new();
+        let sql = vec![
+            "select", definitions_table::ID, 
+            "from", definitions_table::TABLE_NAME,
+            "where", definitions_table::CLUSTER_ID, "=", &indexer.next()
+        ].join(" ");
+        match error_msg!(db.query(sql.as_str(), &[id])) {
+            Ok(rows) => {
+                for postgres_row in rows.iter() {
+                    let definition_row = error_msg!(get_definition_from_row(&postgres_row))?;
+                    error_msg!(delete_definition(&data, &definition_row.id))?
+                }
+            },
+            Err(error) => {
+                return Err(error);
+            }
+        };
+    }
     let mut indxer = ParamIndexer::new();
     let sql = vec![
         "delete", "from", table::TABLE_NAME,
@@ -30,7 +58,7 @@ pub fn delete_cluster(data: Data<AppData>, id: &i32) -> Result<(), String> {
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_cluster(data, &info.id)) {
+    match error_msg!(delete_cluster(&data, &info.id)) {
         Ok(_) => {
             return HttpResponse::Ok().finish();
         },

@@ -4,6 +4,7 @@ use crate::{
     AppData,
     error_msg, 
     schema::{
+        Int,
         ParamIndexer,
         definitions::{
             Row,
@@ -11,10 +12,11 @@ use crate::{
         }
     },
 };
+use postgres::Row as PostgresRow;
 
 #[derive(Debug, Deserialize)]
 pub struct Info {
-    id: i32
+    id: Int
 }
 
 #[derive(Debug, Serialize)]
@@ -28,7 +30,20 @@ pub enum Reply {
     }
 }
 
-pub fn get_defition(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
+pub fn get_definition_from_row(row: &PostgresRow) -> Result<Row, String> {
+    Ok(Row {
+        id: error_msg!(row.try_get(table::ID))?,
+        words_group_id: error_msg!(row.try_get(table::WORDS_GROUP_ID))?,
+        cluster_id: error_msg!(row.try_get(table::CLUSTER_ID))?,
+        pronounciation: error_msg!(row.try_get(table::PRONOUNCIATION))?,
+        word: error_msg!(row.try_get(table::WORD))?,
+        prefixes: error_msg!(row.try_get(table::PREFIXES))?,
+        suffixes: error_msg!(row.try_get(table::SUFFIXES))?,
+        definition: error_msg!(row.try_get(table::DEFINITION))?
+    })
+}
+
+pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Row>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -39,16 +54,7 @@ pub fn get_defition(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String
     let example: Option<Row> = match error_msg!(db.query(sql.as_str(), &[id])) {
         Ok(rows) => match rows.get(0) {
             Some(row) => {
-                Some(Row {
-                    id: error_msg!(row.try_get(table::ID))?,
-                    words_group_id: error_msg!(row.try_get(table::WORDS_GROUP_ID))?,
-                    cluster_id: error_msg!(row.try_get(table::CLUSTER_ID))?,
-                    pronounciation: error_msg!(row.try_get(table::PRONOUNCIATION))?,
-                    word: error_msg!(row.try_get(table::WORD))?,
-                    prefixes: error_msg!(row.try_get(table::PREFIXES))?,
-                    suffixes: error_msg!(row.try_get(table::SUFFIXES))?,
-                    definition: error_msg!(row.try_get(table::DEFINITION))?
-                })
+                Some(error_msg!(get_definition_from_row(&row))?)
             },
             None => {
                 return Err(format!("{}::{} Could not find row", file!(), line!()));

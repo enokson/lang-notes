@@ -1,9 +1,16 @@
 use actix_web::web::{Data, HttpResponse, Query};
 use serde::{Deserialize};
 use crate::{
-    AppData, 
+    AppData,
+    api::{
+        definition::{
+            get_definition::get_definition_from_row,
+            delete_definition::delete_definition
+        }
+    },
     schema::{
         ParamIndexer,
+        definitions::table as definitions_table,
         word_groups::{
             table
         }
@@ -19,6 +26,25 @@ pub struct Info {
 pub fn delete_words_group(data: Data<AppData>, id: &i32) -> Result<(), String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indxer = ParamIndexer::new();
+    {
+        let mut indexer = ParamIndexer::new();
+        let sql = vec![
+            "select", definitions_table::ID, 
+            "from", definitions_table::TABLE_NAME,
+            "where", definitions_table::CLUSTER_ID, "=", &indexer.next()
+        ].join(" ");
+        match error_msg!(db.query(sql.as_str(), &[id])) {
+            Ok(rows) => {
+                for postgres_row in rows.iter() {
+                    let definition_row = error_msg!(get_definition_from_row(&postgres_row))?;
+                    error_msg!(delete_definition(&data, &definition_row.id))?
+                }
+            },
+            Err(error) => {
+                return Err(error);
+            }
+        };
+    }
     let sql = vec![
         "delete", "from", table::TABLE_NAME,
         "where", table::ID, "=", &indxer.next()

@@ -9,7 +9,9 @@ use crate::{
             Row,
             table
         }
-    }};
+    }
+};
+use postgres::Row as PostgresRow;
 
 #[derive(Debug, Deserialize)]
 pub struct Info {
@@ -27,6 +29,15 @@ pub enum Reply {
     }
 }
 
+pub fn get_example_from_row(row: &PostgresRow) ->  Result<Row, String> {
+    Ok(Row {
+        id: error_msg!(row.try_get(table::ID))?,
+        parent_type: error_msg!(row.try_get(table::PARENT_TYPE))?,
+        parent_id: error_msg!(row.try_get(table::PARENT_ID))?,
+        example: error_msg!(row.try_get(table::EXAMPLE))?
+    })
+}
+
 pub fn get_example(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
@@ -39,12 +50,7 @@ pub fn get_example(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String>
     let example: Option<Row> = match error_msg!(db.query(sql.as_str(), &[id])) {
         Ok(rows) => match rows.get(0) {
             Some(row) => {
-                Some(Row {
-                    id: error_msg!(row.try_get(table::ID))?,
-                    parent_type: error_msg!(row.try_get(table::PARENT_TYPE))?,
-                    parent_id: error_msg!(row.try_get(table::PARENT_ID))?,
-                    example: error_msg!(row.try_get(table::EXAMPLE))?
-                })
+                Some(error_msg!(get_example_from_row(&row))?)
             },
             None => {
                 return Err(format!("{}::{} Could not find row", file!(), line!()));
