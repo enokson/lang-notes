@@ -28,7 +28,7 @@ pub enum Reply {
     }
 }
 
-pub fn get_words_group(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
+pub fn get_words_group(data: &Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -57,7 +57,7 @@ pub fn get_words_group(data: Data<AppData>, id: &i32) -> Result<Option<Row>, Str
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_words_group(data, &info.id)) {
+    match error_msg!(get_words_group(&data, &info.id)) {
         Ok(example) => {
             return HttpResponse::Ok().json(Reply::Ok{ example });
         },

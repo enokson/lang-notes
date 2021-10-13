@@ -6,9 +6,19 @@ use postgres::types::ToSql;
 use serde::{ Serialize };
 use crate::{
     AppData,
+    api::{
+        words_group::{
+            get_words_group::get_words_group,
+            post_words_group::post_words_group
+        }
+    },
     schema::{
         ParamIndexer,
-        definitions::{table, RowI}
+        definitions::{table, RowI},
+        word_groups::{
+            RowI as WordsGroupRowI,
+            NewDefinition
+        }
     },
     error_msg
 };
@@ -20,8 +30,20 @@ pub enum Reply {
     Err { error: String }
 }
 
-pub fn post_definition(data: Data<AppData>, body: Json<RowI>) -> Result<i32, String> {
+pub const COULD_NOT_FIND_WORDS_GROUP_ERROR: &'static str = "Could not find words-group";
+
+pub fn post_definition(data: &Data<AppData>, body: &RowI) -> Result<i32, String> {
     let mut db = error_msg!(data.db.try_lock())?;
+    let words_group_id = match &body.words_group {
+        NewDefinition::Existing{ id } => match error_msg!(get_words_group(&data, &id)) {
+            Ok(option) => match option {
+                Some(words_group) => Ok(words_group.id),
+                None => Err(format!("{}: {}.", COULD_NOT_FIND_WORDS_GROUP_ERROR, id))
+            },
+            Err(error) => Err(error)
+        },
+        NewDefinition::New{ name } => error_msg!(post_words_group(data, &WordsGroupRowI { name: name.to_string() }))
+    }?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
         "insert", "into", table::TABLE_NAME,
@@ -36,7 +58,6 @@ pub fn post_definition(data: Data<AppData>, body: Json<RowI>) -> Result<i32, Str
         ].join(",")),
         "values", &format!("({})", indexer.params(&7))
     ].join(" ");
-    let words_group_id = 1;
     let params: [&(dyn ToSql + Sync); 7] = [
         &words_group_id, 
         &body.cluster_id, 
@@ -66,11 +87,14 @@ pub fn post_definition(data: Data<AppData>, body: Json<RowI>) -> Result<i32, Str
 }
 
 pub fn post(data: Data<AppData>, body: Json<RowI>) -> HttpResponse {
-    match error_msg!(post_definition(data, body)) {
+    match error_msg!(post_definition(&data, &body.into_inner())) {
         Ok(id) => {
             return HttpResponse::Ok().json(Reply::Ok{ id });
         },
         Err(error) => {
+            if error.contains(COULD_NOT_FIND_WORDS_GROUP_ERROR) {
+                return HttpResponse::Forbidden().json(Reply::Err{ error } );
+            }
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }

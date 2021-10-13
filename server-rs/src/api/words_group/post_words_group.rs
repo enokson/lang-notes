@@ -19,7 +19,7 @@ pub enum Reply {
     Err { error: String }
 }
 
-pub fn post_words_group(data: Data<AppData>, body: Json<RowI>) -> Result<i32, String> {
+pub fn post_words_group(data: &Data<AppData>, body: &RowI) -> Result<i32, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -47,7 +47,7 @@ pub fn post_words_group(data: Data<AppData>, body: Json<RowI>) -> Result<i32, St
 }
 
 pub fn post(data: Data<AppData>, body: Json<RowI>) -> HttpResponse {
-    match error_msg!(post_words_group(data, body)) {
+    match error_msg!(post_words_group(&data, &body.into_inner())) {
         Ok(id) => {
             return HttpResponse::Ok().json(Reply::Ok{ id });
         },
