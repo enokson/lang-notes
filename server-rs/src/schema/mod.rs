@@ -1,5 +1,4 @@
 use postgres::Client;
-use serde::{Deserialize, Serialize};
 
 use std::sync::MutexGuard;
 
