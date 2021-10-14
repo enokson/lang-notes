@@ -22,7 +22,8 @@ pub fn post_cluster(data: Data<AppData>) -> Result<i32, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let sql = vec![
         "insert", "into", table::TABLE_NAME,
-        "()", "values", "()"
+        "values", "(default)",
+        "returning", table::ID
     ].join(" ");
     let id = match error_msg!(db.query(sql.as_str(), &[])) {
         Ok(rows) => match rows.get(0) {
