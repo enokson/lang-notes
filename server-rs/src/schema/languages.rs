@@ -8,12 +8,14 @@ pub mod table {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub id: Int,
     pub name: String
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RowI {
     pub name: String
 }

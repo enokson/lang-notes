@@ -19,6 +19,7 @@ pub mod table {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub id: Int,
     pub words_group_id: Int,
@@ -31,6 +32,7 @@ pub struct Row {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RowI {
     pub words_group: NewDefinition,
     pub cluster_id: Int,

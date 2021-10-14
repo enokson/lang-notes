@@ -10,6 +10,7 @@ pub mod table {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub id: Int,
     pub lang_id: Int,
@@ -18,6 +19,7 @@ pub struct Row {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RowI {
     pub lang_id: Int,
     pub definition_id: Int,
@@ -25,6 +27,7 @@ pub struct RowI {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Translation {
     pub value: Row,
     pub examples: Vec<Int>

@@ -7,11 +7,13 @@ pub mod table {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub id: Int
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Cluster {
     pub cluster: Row,
     pub definitions: Vec<Int>

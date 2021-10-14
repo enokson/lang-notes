@@ -8,17 +8,21 @@ pub mod table {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Row {
     pub id: Int,
     pub name: String
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RowI {
     pub name: String
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(untagged)]
 pub enum NewDefinition {
     New { name: String },
     Existing { id: Int }
