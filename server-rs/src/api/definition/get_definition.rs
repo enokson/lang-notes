@@ -1,16 +1,23 @@
 use actix_web::web::{Data, HttpResponse, Query};
 use serde::{Deserialize, Serialize};
 use crate::{
-    AppData,
+    AppData, 
     error_msg, 
     schema::{
-        Int,
-        ParamIndexer,
+        Int, 
+        ParamIndexer, 
         definitions::{
+            Definition,
             Row,
             table
+        }, 
+        examples::{
+            table as examples_table
+        }, 
+        translations::{
+            table as translations_table
         }
-    },
+    }
 };
 use postgres::Row as PostgresRow;
 
@@ -23,7 +30,7 @@ pub struct Info {
 #[serde(untagged)]
 pub enum Reply {
     Ok {        
-        example: Option<Row>
+        definition: Option<Definition>
     },
     Error {
         error: String
@@ -43,7 +50,7 @@ pub fn get_definition_from_row(row: &PostgresRow) -> Result<Row, String> {
     })
 }
 
-pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Row>, String> {
+pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Definition>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -51,10 +58,38 @@ pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Row>, String
         "where", table::ID, "=", &indexer.next(),
         "limit", "1"
     ].join(" ");
-    let example: Option<Row> = match error_msg!(db.query(sql.as_str(), &[id])) {
+    let example: Option<Definition> = match error_msg!(db.query(sql.as_str(), &[id])) {
         Ok(rows) => match rows.get(0) {
             Some(row) => {
-                Some(error_msg!(get_definition_from_row(&row))?)
+                let definition = error_msg!(get_definition_from_row(&row))?;
+                let mut indexer = ParamIndexer::new();
+                let examples_query = vec![
+                    "select", examples_table::ID,
+                    "from", examples_table::TABLE_NAME,
+                    "where", table::ID, "=", &indexer.next()
+                ].join(" ");
+                let examples = match error_msg!(db.query(examples_query.as_str(), &[ &definition.id ])) {
+                    Ok(rows) => rows.iter().map(|row| {
+                        Ok(error_msg!(row.try_get(examples_table::ID))?)
+                    }).collect::<Result<Vec<Int>, String>>(),
+                    Err(error) => Err(error)
+                }?;
+                let translations_query = vec![
+                    "select", translations_table::ID,
+                    "from", translations_table::TABLE_NAME,
+                    "where", table::ID, "=", &indexer.last()
+                ].join(" ");
+                let translations = match error_msg!(db.query(translations_query.as_str(), &[ &definition.id ])) {
+                    Ok(rows) => rows.iter().map(|row| {
+                        Ok(error_msg!(row.try_get(translations_table::ID))?)
+                    }).collect::<Result<Vec<Int>, String>>(),
+                    Err(error) => Err(error)
+                }?;
+                Some(Definition {
+                    value: definition,
+                    examples,
+                    translations
+                })
             },
             None => {
                 return Err(format!("{}::{} Could not find row", file!(), line!()));
@@ -69,8 +104,8 @@ pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Row>, String
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
     match error_msg!(get_defition(data, &info.id)) {
-        Ok(example) => {
-            return HttpResponse::Ok().json(Reply::Ok{ example });
+        Ok(definition) => {
+            return HttpResponse::Ok().json(Reply::Ok{ definition });
         },
         Err(error) => {
             println!("{}", error);

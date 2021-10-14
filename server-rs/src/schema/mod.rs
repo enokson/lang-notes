@@ -17,12 +17,14 @@ pub struct ParamIndexer {
 }
 impl ParamIndexer {
     pub fn new() -> ParamIndexer {
-        ParamIndexer { count: 1 }
+        ParamIndexer { count: 0 }
     }
     pub fn next(&mut self) -> String {
-        let count = self.count;
         self.count += 1;
-        format!("${}", count)
+        format!("${}", &self.count)
+    }
+    pub fn last(&self) -> String {
+        format!("${}", &self.count)
     }
     pub fn params(&mut self, count: &u8) -> String {
         let mut params = vec![];

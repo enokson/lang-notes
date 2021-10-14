@@ -4,9 +4,14 @@ use crate::{
     AppData,
     error_msg, 
     schema::{
+        Int,
+        examples::{
+            table as examples_table
+        },
         translations::{
             Row,
-            table
+            table,
+            Translation
         },
         ParamIndexer
     },
@@ -22,7 +27,7 @@ pub struct Info {
 #[serde(untagged)]
 pub enum Reply {
     Ok {        
-        example: Option<Row>
+        translation: Option<Translation>
     },
     Error {
         error: String
@@ -38,7 +43,7 @@ pub fn get_translation_from_row(row: &PostgresRow) -> Result<Row, String> {
     })
 }
 
-pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
+pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Translation>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -47,10 +52,26 @@ pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Row>, St
         "where", table::ID, "=", &indexer.next(),
         "limit", "1"
     ].join(" ");
-    let example: Option<Row> = match error_msg!(db.query(sql.as_str(), &[id])) {
+    let translation: Option<Translation> = match error_msg!(db.query(sql.as_str(), &[id])) {
         Ok(rows) => match rows.get(0) {
             Some(row) => {
-                Some(error_msg!(get_translation_from_row(row))?)
+                let translation = error_msg!(get_translation_from_row(row))?;
+                let mut indexer = ParamIndexer::new();
+                let examples_query = vec![
+                    "select", examples_table::ID,
+                    "from", examples_table::TABLE_NAME,
+                    "where", table::ID, "=", &indexer.next()
+                ].join(" ");
+                let examples = match error_msg!(db.query(examples_query.as_str(), &[ &translation.id ])) {
+                    Ok(rows) => rows.iter().map(|row| {
+                        Ok(error_msg!(row.try_get(examples_table::ID))?)
+                    }).collect::<Result<Vec<Int>, String>>(),
+                    Err(error) => Err(error)
+                }?;
+                Some(Translation {
+                    value: translation,
+                    examples
+                })
             },
             None => {
                 return Err(format!("{}::{} Could not find row", file!(), line!()));
@@ -60,13 +81,13 @@ pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Row>, St
             return Err(error);
         }
     };
-    return Ok(example); 
+    return Ok(translation); 
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
     match error_msg!(get_translation(&data, &info.id)) {
-        Ok(example) => {
-            return HttpResponse::Ok().json(Reply::Ok{ example });
+        Ok(translation) => {
+            return HttpResponse::Ok().json(Reply::Ok{ translation });
         },
         Err(error) => {
             println!("{}", error);

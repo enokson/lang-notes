@@ -1,12 +1,4 @@
-use crate::{
-    schema::{
-        Int,
-        definitions::{
-            Row as DefinitionRow,
-            RowI as DefinitionRowI
-        }
-    }
-};
+use crate::schema::Int;
 use serde::{Deserialize, Serialize};
 
 pub mod table {
@@ -16,16 +8,11 @@ pub mod table {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Row {
-    id: Int
+    pub id: Int
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Cluster {
-    cluster: Row,
-    definition: Vec<DefinitionRow>
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ClusterI {
-    definitions: Vec<DefinitionRowI>
+    pub cluster: Row,
+    pub definitions: Vec<Int>
 }

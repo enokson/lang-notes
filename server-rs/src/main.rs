@@ -45,7 +45,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/example", web::put().to(api::example::update_example::update))
                     .route("/example", web::delete().to(api::example::delete_example::delete))
                     
-                    .route("/search", web::get().to(api::key_search::get_clusters_by_search_keys))
+                    .route("/search", web::get().to(api::search::search))
 
                     .route("/language", web::post().to(api::language::post_lang::post))
                     .route("/language", web::get().to(api::language::get_lang::get))

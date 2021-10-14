@@ -1,8 +1,5 @@
 use serde::{Deserialize, Serialize};
-use super::{
-    Int,
-    examples
-};
+use crate::schema::Int;
 
 pub mod table {
     pub const TABLE_NAME: &'static str = "translations";
@@ -30,11 +27,5 @@ pub struct RowI {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Translation {
     pub value: Row,
-    pub examples: Vec<examples::Row>
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct TranslationI {
-    pub value: RowI,
-    pub examples: Vec<examples::RowI>
+    pub examples: Vec<Int>
 }

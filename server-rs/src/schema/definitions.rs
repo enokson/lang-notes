@@ -1,16 +1,7 @@
 use serde::{Deserialize, Serialize};
-use super::{
+use crate::schema::{
     Int,
-    examples::{
-        Row as ExampleRow,
-        RowI as ExampleRowI
-    },
-    translations::{
-        Row as TranslationRow,
-        RowI as TranslationRowI
-    },
     word_groups::{
-        Row as WordsGroupRow,
         NewDefinition
     }
 };
@@ -53,15 +44,6 @@ pub struct RowI {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Definition {
     pub value: Row,
-    pub words_group: WordsGroupRow,
-    pub translations: Vec<TranslationRow>,
-    pub examples: Vec<ExampleRow>
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct DefinitionI {
-    pub value: RowI,
-    // pub words_group: WordsGroupRowI, this is not needed id it is already being handled in the value prop
-    pub translations: Option<Vec<TranslationRowI>>,
-    pub examples: Option<Vec<ExampleRowI>>
+    pub translations: Vec<Int>,
+    pub examples: Vec<Int>
 }
