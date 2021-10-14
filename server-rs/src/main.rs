@@ -33,7 +33,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(data.clone())
 
                     .route("/cluster", web::post().to(api::cluster::post_cluster::post))
-                    .route("/cluster", web::delete().to(api::cluster::delete_cluster::delete))
+                    // .route("/cluster", web::delete().to(api::cluster::delete_cluster::delete))
 
                     .route("/definition", web::post().to(api::definition::post_definition::post))
                     .route("/definition", web::get().to(api::definition::get_definition::get))
