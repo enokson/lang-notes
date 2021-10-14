@@ -50,7 +50,8 @@ pub fn search_clusters(data: Data<AppData>, info: &Info) -> Result<Vec<Cluster>,
     let definitions_sub_query = vec![
         "select", "distinct", definitions_table::ID,
         "from", definitions_table::TABLE_NAME,
-        "where", definitions_table::DEFINITION, "like", &format!("%{}%", indexer.last())
+        "where", definitions_table::DEFINITION, "like", &format!("%{}%", indexer.last()),
+        "or", definitions_table::WORD, "like", &format!("%{}%", indexer.last())
     ].join(" ");
     let cluster_sub_query = vec![
         "select", "distinct", clusters_table::ID,
@@ -65,7 +66,7 @@ pub fn search_clusters(data: Data<AppData>, info: &Info) -> Result<Vec<Cluster>,
     }?.iter().map(|row| -> Result<Cluster, String> {
         let mut indexer = ParamIndexer::new();
         let definition_query = vec![
-            "select", "*",
+            "select", definitions_table::ID,
             "from", definitions_table::TABLE_NAME,
             "where", definitions_table::CLUSTER_ID, "=", &indexer.next()
         ].join(" ");
