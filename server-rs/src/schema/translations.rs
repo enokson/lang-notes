@@ -29,3 +29,17 @@ pub struct Translation {
     pub value: Row,
     pub examples: Vec<Int>
 }
+
+pub fn get_create_table_sql() -> String {
+    vec![
+        "create", "table", "if not exists", table::TABLE_NAME,
+        &format!("({})",
+            vec![
+                format!("{} serial not null unique",    table::ID),
+                format!("{} int not null",              table::LANG_ID),
+                format!("{} int not null",              table::DEFINITION_ID),
+                format!("{} varchar(256) not null",     table::DEFINITION)
+            ].join(",")
+        )
+    ].join(" ")
+}

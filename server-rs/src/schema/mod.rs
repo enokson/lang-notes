@@ -1,5 +1,5 @@
+use crate::error_msg;
 use postgres::Client;
-
 use std::sync::MutexGuard;
 
 pub mod clusters;
@@ -35,18 +35,12 @@ impl ParamIndexer {
     }
 }
 
-pub fn create_tables(_db: &mut Db) -> Result<(), String> {
-
-    // error_msg!(Table::new("clusters").create_table(db, vec![
-    //     (clusters::K::Id, "serial not null unique primary key")
-    // ]))?;
-
-    // error_msg!(Table::new("examples").create_table(db, vec![
-    //     (examples::K::Id, "serial not null unique primary key"),
-    //     (examples::K::ParentType, "int not null"),
-    //     (examples::K::ParentId, "int not null"),
-    //     (examples::K::Example, "varchar(256) not null")
-    // ]))?;
-
+pub fn create_tables(db: &mut Db) -> Result<(), String> {
+    error_msg!(db.query(clusters::get_create_table_sql().as_str(), &[]))?;
+    error_msg!(db.query(definitions::get_create_table_sql().as_str(), &[]))?;
+    error_msg!(db.query(examples::get_create_table_sql().as_str(), &[]))?;
+    error_msg!(db.query(languages::get_create_table_sql().as_str(), &[]))?;
+    error_msg!(db.query(translations::get_create_table_sql().as_str(), &[]))?;
+    error_msg!(db.query(word_groups::get_create_table_sql().as_str(), &[]))?;
     Ok(())
 }

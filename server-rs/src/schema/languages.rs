@@ -17,3 +17,15 @@ pub struct Row {
 pub struct RowI {
     pub name: String
 }
+
+pub fn get_create_table_sql() -> String {
+    vec![
+        "create", "table", "if not exists", table::TABLE_NAME,
+        &format!("({})",
+            vec![
+                format!("{} serial not null unique",    table::ID),
+                format!("{} varchar(256) not null",     table::NAME)
+            ].join(",")
+        )
+    ].join(" ")
+}

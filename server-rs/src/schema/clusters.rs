@@ -16,3 +16,14 @@ pub struct Cluster {
     pub cluster: Row,
     pub definitions: Vec<Int>
 }
+
+pub fn get_create_table_sql() -> String {
+    vec![
+        "create", "table", "if not exists", table::TABLE_NAME,
+        &format!("({})",
+            vec![
+                format!("{} serial not null unique", table::ID)
+            ].join(",")
+        )
+    ].join(" ")
+}

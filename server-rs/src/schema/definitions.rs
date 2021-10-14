@@ -47,3 +47,21 @@ pub struct Definition {
     pub translations: Vec<Int>,
     pub examples: Vec<Int>
 }
+
+pub fn get_create_table_sql() -> String {
+    vec![
+        "create", "table", "if not exists", table::TABLE_NAME,
+        &format!("({})",
+            vec![
+                format!("{} serial not null unique",    table::ID),
+                format!("{} int not null",              table::WORDS_GROUP_ID),
+                format!("{} int not null",              table::CLUSTER_ID),
+                format!("{} varchar(256)",              table::PRONOUNCIATION),
+                format!("{} varchar(256) not null",     table::WORD),
+                format!("{} varchar(256)",              table::PREFIXES),
+                format!("{} varchar(256)",              table::SUFFIXES),
+                format!("{} varchar(256) not null",     table::DEFINITION)
+            ].join(",")
+        )
+    ].join(" ")
+}
