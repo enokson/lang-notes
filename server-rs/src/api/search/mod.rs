@@ -40,27 +40,25 @@ pub enum Reply {
 
 pub fn search_clusters(data: Data<AppData>, info: &Info) -> Result<Vec<Cluster>, String> {
     let mut db = error_msg!(data.db.try_lock())?;
-    let mut indexer = ParamIndexer::new();
-
     let translation_sub_query = vec![
         "select", "distinct", translations_table::DEFINITION_ID,
         "from", translations_table::TABLE_NAME,
-        "where", translations_table::DEFINITION, "like", &format!("'%{}%'", indexer.next())
+        "where", translations_table::DEFINITION, "like", &format!("'%{}%'", info.text)
     ].join(" ");
     let definitions_sub_query = vec![
-        "select", "distinct", definitions_table::ID,
+        "select", "distinct", definitions_table::CLUSTER_ID,
         "from", definitions_table::TABLE_NAME,
-        "where", definitions_table::DEFINITION, "like", &format!("'%{}%'", indexer.last()),
-        "or", definitions_table::WORD, "like", &format!("'%{}%'", indexer.last())
+        "where", definitions_table::DEFINITION, "like", &format!("'%{}%'", info.text),
+        "or", definitions_table::WORD, "like", &format!("'%{}%'", info.text),
+        "or", definitions_table::ID, "in", &format!("({})", translation_sub_query)
     ].join(" ");
-    let cluster_sub_query = vec![
+    let query = vec![
         "select", "distinct", clusters_table::ID,
         "from", clusters_table::TABLE_NAME,
-        "where", translations_table::ID, "in", &format!("({})", translation_sub_query),
-        "or", definitions_table::ID, "in", &format!("({})", definitions_sub_query)
+        "where", definitions_table::ID, "in", &format!("({})", definitions_sub_query)
     ].join(" ");
-
-    let clusters = match error_msg!(db.query(cluster_sub_query.as_str(), &[&info.text])) {
+    // println!("{}", cluster_sub_query);
+    let clusters = match error_msg!(db.query(query.as_str(), &[])) {
         Ok(rows) => Ok(rows),
         Err(error) => Err(error)
     }?.iter().map(|row| -> Result<Cluster, String> {
