@@ -5,6 +5,7 @@ use actix_web::{
 use crate::{
     AppData,
     schema::{
+        Db,
         Int,
         ParamIndexer,
         clusters::{
@@ -38,8 +39,7 @@ pub enum Reply {
     }
 }
 
-pub fn search_clusters(data: Data<AppData>, info: &Info) -> Result<Vec<Cluster>, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn search_clusters(db: &mut Db, info: &Info) -> Result<Vec<Cluster>, String> {
     let translation_sub_query = vec![
         "select", "distinct", translations_table::DEFINITION_ID,
         "from", translations_table::TABLE_NAME,
@@ -84,13 +84,19 @@ pub fn search_clusters(data: Data<AppData>, info: &Info) -> Result<Vec<Cluster>,
 }
 
 pub fn search(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(search_clusters(data, &info.into_inner())) {
-        Ok(clusters) => {
-            return HttpResponse::Ok().json(Reply::Ok{ clusters });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(search_clusters(&mut db, &info.into_inner())) {
+            Ok(clusters) => {
+                return HttpResponse::Ok().json(Reply::Ok{ clusters });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }
