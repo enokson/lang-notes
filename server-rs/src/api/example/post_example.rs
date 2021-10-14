@@ -8,6 +8,7 @@ use crate::{
     AppData,
     schema::{
         Db,
+        ParamIndexer,
         examples::{table, RowI}
     },
     error_msg
@@ -26,8 +27,13 @@ pub fn post_example(db: &mut Db, body: &RowI) -> Result<i32, String> {
         table::PARENT_ID,
         table::EXAMPLE
     ];
-    let columns_str = columns.join(",");
-    let sql = format!("insert into {} ({}) values ($1, $2, $3)", table::TABLE_NAME, columns_str);
+    let mut indexer = ParamIndexer::new();
+    let sql = vec![
+        "insert", "into", table::TABLE_NAME,
+        &format!("({})", columns.join(",")),
+        "values", &format!("({})", indexer.params(&3)),
+        "returning", table::ID
+    ].join(" ");
     let params: Vec<Box<(dyn ToSql + Sync)>> = vec![
         Box::new(body.parent_type),
         Box::new(body.parent_id),
@@ -35,7 +41,7 @@ pub fn post_example(db: &mut Db, body: &RowI) -> Result<i32, String> {
     ];
     let id = match error_msg!(db.query(sql.as_str(), &params.iter().map(|p| p.as_ref()).collect::<Vec<&(dyn ToSql + Sync)>>())) {
         Ok(rows) => match rows.get(0) {
-            Some(row) => match error_msg!(row.try_get("id")) {
+            Some(row) => match error_msg!(row.try_get(table::ID)) {
                 Ok(id) => id,
                 Err(error) => {
                     return Err(error);

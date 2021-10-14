@@ -57,7 +57,8 @@ pub fn post_definition(db: &mut Db, body: &RowI) -> Result<i32, String> {
             table::SUFFIXES,
             table::DEFINITION
         ].join(",")),
-        "values", &format!("({})", indexer.params(&7))
+        "values", &format!("({})", indexer.params(&7)),
+        "returning", table::ID
     ].join(" ");
     let params: [&(dyn ToSql + Sync); 7] = [
         &words_group_id, 

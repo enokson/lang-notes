@@ -25,7 +25,8 @@ pub fn post_translation(db: &mut Db, body: &RowI) -> Result<i32, String> {
     let sql = vec![
         "insert", "into", table::TABLE_NAME,
         &format!("({})", vec![table::LANG_ID, table::DEFINITION].join(",")),
-        &format!("values ({})", indexer.params(&2))
+        &format!("values ({})", indexer.params(&2)),
+        "returning", table::ID
     ].join(" ");
     let id = match error_msg!(db.query(sql.as_str(), &[&body.lang_id, &body.definition])) {
         Ok(rows) => match rows.get(0) {

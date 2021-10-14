@@ -25,11 +25,12 @@ pub fn post_lang(db: &mut Db, body: &RowI) -> Result<i32, String> {
     let sql = vec![
         "insert", "into", table::TABLE_NAME,
         &format!("({})", vec![table::NAME].join(",")),
-        &format!("values ({})", indexer.params(&1))
+        &format!("values ({})", indexer.params(&1)),
+        "returning", table::ID
     ].join(" ");
     let id = match error_msg!(db.query(sql.as_str(), &[&body.name])) {
         Ok(rows) => match rows.get(0) {
-            Some(row) => match error_msg!(row.try_get("id")) {
+            Some(row) => match error_msg!(row.try_get(table::ID)) {
                 Ok(id) => id,
                 Err(error) => {
                     return Err(error);
