@@ -1495,7 +1495,6 @@ name = "server-rs"
 version = "0.1.0"
 dependencies = [
  "actix-web",
- "lazy_static",
  "postgres",
  "serde",
  "serde_json",
