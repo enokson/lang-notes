@@ -9,6 +9,7 @@ use crate::{
         }
     },
     schema::{
+        Db,
         ParamIndexer,
         clusters::{
             table
@@ -25,8 +26,7 @@ pub struct Info {
     id: i32
 }
 
-pub fn delete_cluster(data: &Data<AppData>, id: &i32) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn delete_cluster(db: &mut Db, id: &i32) -> Result<(), String> {
     {
         let mut indexer = ParamIndexer::new();
         let sql = vec![
@@ -38,7 +38,7 @@ pub fn delete_cluster(data: &Data<AppData>, id: &i32) -> Result<(), String> {
             Ok(rows) => {
                 for postgres_row in rows.iter() {
                     let definition_row = error_msg!(get_definition_from_row(&postgres_row))?;
-                    error_msg!(delete_definition(&data, &definition_row.id))?
+                    error_msg!(delete_definition(db, &definition_row.id))?
                 }
             },
             Err(error) => {
@@ -58,13 +58,19 @@ pub fn delete_cluster(data: &Data<AppData>, id: &i32) -> Result<(), String> {
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_cluster(&data, &info.id)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(delete_cluster(&mut db, &info.id)) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

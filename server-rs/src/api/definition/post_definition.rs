@@ -13,6 +13,7 @@ use crate::{
         }
     },
     schema::{
+        Db,
         ParamIndexer,
         definitions::{table, RowI},
         word_groups::{
@@ -32,17 +33,17 @@ pub enum Reply {
 
 pub const COULD_NOT_FIND_WORDS_GROUP_ERROR: &'static str = "Could not find words-group";
 
-pub fn post_definition(data: &Data<AppData>, body: &RowI) -> Result<i32, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn post_definition(db: &mut Db, body: &RowI) -> Result<i32, String> {
+    
     let words_group_id = match &body.words_group {
-        NewDefinition::Existing{ id } => match error_msg!(get_words_group(&data, &id)) {
+        NewDefinition::Existing{ id } => match error_msg!(get_words_group(db, &id)) {
             Ok(option) => match option {
                 Some(words_group) => Ok(words_group.id),
                 None => Err(format!("{}: {}.", COULD_NOT_FIND_WORDS_GROUP_ERROR, id))
             },
             Err(error) => Err(error)
         },
-        NewDefinition::New{ name } => error_msg!(post_words_group(data, &WordsGroupRowI { name: name.to_string() }))
+        NewDefinition::New{ name } => error_msg!(post_words_group(db, &WordsGroupRowI { name: name.to_string() }))
     }?;
     let mut indexer = ParamIndexer::new();
     let sql = vec![
@@ -87,16 +88,22 @@ pub fn post_definition(data: &Data<AppData>, body: &RowI) -> Result<i32, String>
 }
 
 pub fn post(data: Data<AppData>, body: Json<RowI>) -> HttpResponse {
-    match error_msg!(post_definition(&data, &body.into_inner())) {
-        Ok(id) => {
-            return HttpResponse::Ok().json(Reply::Ok{ id });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(post_definition(&mut db, &body.into_inner())) {
+            Ok(id) => {
+                return HttpResponse::Ok().json(Reply::Ok{ id });
+            },
+            Err(error) => {
+                if error.contains(COULD_NOT_FIND_WORDS_GROUP_ERROR) {
+                    return HttpResponse::Forbidden().json(Reply::Err{ error } );
+                }
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
-            if error.contains(COULD_NOT_FIND_WORDS_GROUP_ERROR) {
-                return HttpResponse::Forbidden().json(Reply::Err{ error } );
-            }
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 }

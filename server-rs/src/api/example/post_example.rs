@@ -7,6 +7,7 @@ use serde::{ Serialize };
 use crate::{
     AppData,
     schema::{
+        Db,
         examples::{table, RowI}
     },
     error_msg
@@ -19,8 +20,7 @@ pub enum Reply {
     Err { error: String }
 }
 
-pub fn post_example(data: Data<AppData>, body: Json<RowI>) -> Result<i32, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn post_example(db: &mut Db, body: &RowI) -> Result<i32, String> {
     let columns = vec![
         table::PARENT_TYPE,
         table::PARENT_ID,
@@ -53,13 +53,19 @@ pub fn post_example(data: Data<AppData>, body: Json<RowI>) -> Result<i32, String
 }
 
 pub fn post(data: Data<AppData>, body: Json<RowI>) -> HttpResponse {
-    match error_msg!(post_example(data, body)) {
-        Ok(id) => {
-            return HttpResponse::Ok().json(Reply::Ok{ id });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(post_example(&mut db, &body.into_inner())) {
+            Ok(id) => {
+                return HttpResponse::Ok().json(Reply::Ok{ id });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 }

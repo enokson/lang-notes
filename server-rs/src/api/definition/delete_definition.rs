@@ -13,6 +13,7 @@ use crate::{
         }
     },
     schema::{
+        Db,
         ParamIndexer,
         definitions::{
             table
@@ -32,8 +33,7 @@ pub struct Info {
     id: i32
 }
 
-pub fn delete_definition(data: &Data<AppData>, id: &i32) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn delete_definition(db: &mut Db, id: &i32) -> Result<(), String> {
     {
         let mut indexer = ParamIndexer::new();
         let sql = vec![
@@ -46,7 +46,7 @@ pub fn delete_definition(data: &Data<AppData>, id: &i32) -> Result<(), String> {
             Ok(rows) => {
                 for row in rows.iter() {
                     let example = error_msg!(get_example_from_row(row))?;
-                    error_msg!(delete_example(&data, &example.id))?;
+                    error_msg!(delete_example(db, &example.id))?;
                 }
             },
             Err(error) => {
@@ -65,7 +65,7 @@ pub fn delete_definition(data: &Data<AppData>, id: &i32) -> Result<(), String> {
             Ok(rows) => {
                 for row in rows.iter() {
                     let translation = error_msg!(get_translation_from_row(row))?;
-                    error_msg!(delete_translation(&data, &translation.id))?;
+                    error_msg!(delete_translation(db, &translation.id))?;
                 }
             },
             Err(error) => {
@@ -85,13 +85,19 @@ pub fn delete_definition(data: &Data<AppData>, id: &i32) -> Result<(), String> {
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_definition(&data, &info.id)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(delete_definition(&mut db, &info.id)) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

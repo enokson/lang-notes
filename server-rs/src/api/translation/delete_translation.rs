@@ -9,6 +9,7 @@ use crate::{
         }
     },
     schema::{
+        Db,
         Int,
         ParamIndexer,
         examples::{
@@ -26,8 +27,7 @@ pub struct Info {
     id: Int
 }
 
-pub fn delete_translation(data: &Data<AppData>, id: &i32) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn delete_translation(db: &mut Db, id: &i32) -> Result<(), String> {
     {
         let mut indexer = ParamIndexer::new();
         let sql = vec![
@@ -40,7 +40,7 @@ pub fn delete_translation(data: &Data<AppData>, id: &i32) -> Result<(), String> 
             Ok(rows) => {
                 for row in rows.iter() {
                     let example = error_msg!(get_example_from_row(row))?;
-                    error_msg!(delete_example(&data, &example.id))?;
+                    error_msg!(delete_example(db, &example.id))?;
                 }
             },
             Err(error) => {
@@ -60,13 +60,19 @@ pub fn delete_translation(data: &Data<AppData>, id: &i32) -> Result<(), String> 
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_translation(&data, &info.id)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(delete_translation(&mut db, &info.id)) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

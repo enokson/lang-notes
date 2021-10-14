@@ -4,6 +4,7 @@ use crate::{
     AppData, 
     error_msg, 
     schema::{
+        Db,
         Int, 
         ParamIndexer, 
         definitions::{
@@ -30,7 +31,7 @@ pub struct Info {
 #[serde(untagged)]
 pub enum Reply {
     Ok {        
-        definition: Option<Definition>
+        data: Option<Definition>
     },
     Error {
         error: String
@@ -50,8 +51,7 @@ pub fn get_definition_from_row(row: &PostgresRow) -> Result<Row, String> {
     })
 }
 
-pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Definition>, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn get_defition(db: &mut Db, id: &Int) -> Result<Option<Definition>, String> {
     let mut indexer = ParamIndexer::new();
     let sql = vec![
         "select", "*", "from", table::TABLE_NAME,
@@ -103,13 +103,19 @@ pub fn get_defition(data: Data<AppData>, id: &Int) -> Result<Option<Definition>,
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_defition(data, &info.id)) {
-        Ok(definition) => {
-            return HttpResponse::Ok().json(Reply::Ok{ definition });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(get_defition(&mut db, &info.id)) {
+            Ok(data) => {
+                return HttpResponse::Ok().json(Reply::Ok{ data });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

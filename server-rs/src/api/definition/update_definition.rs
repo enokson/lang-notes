@@ -9,12 +9,12 @@ use super::super::super::{
     AppData, schema,
 };
 use schema::{
+    Db,
     ParamIndexer,
     definitions::{table, Row}
 };
 
-pub fn update_definition(data: Data<AppData>, body: Json<Row>) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn update_definition(db: &mut Db, body: &Row) -> Result<(), String> {
     let mut indx = ParamIndexer::new();
     let updates = vec![
         "set", table::WORDS_GROUP_ID, "=", &indx.next(),
@@ -46,13 +46,19 @@ pub fn update_definition(data: Data<AppData>, body: Json<Row>) -> Result<(), Str
 }
 
 pub fn update(data: Data<AppData>, body: Json<Row>) -> HttpResponse {
-    match error_msg!(update_definition(data, body)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(update_definition(&mut db, &body.into_inner())) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 }

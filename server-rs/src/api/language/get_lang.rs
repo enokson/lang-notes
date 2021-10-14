@@ -4,6 +4,7 @@ use crate::{
     AppData,
     error_msg, 
     schema::{
+        Db,
         languages::{
             Row,
             table
@@ -21,15 +22,14 @@ pub struct Info {
 #[serde(untagged)]
 pub enum Reply {
     Ok {        
-        example: Option<Row>
+        data: Option<Row>
     },
     Error {
         error: String
     }
 }
 
-pub fn get_lang(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn get_lang(db: &mut Db, id: &i32) -> Result<Option<Row>, String> {
     let mut indexer = ParamIndexer::new();
     let sql = vec![
         "select", "*",
@@ -57,13 +57,19 @@ pub fn get_lang(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_lang(data, &info.id)) {
-        Ok(example) => {
-            return HttpResponse::Ok().json(Reply::Ok{ example });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(get_lang(&mut db, &info.id)) {
+            Ok(data) => {
+                return HttpResponse::Ok().json(Reply::Ok{ data });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

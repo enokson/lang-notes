@@ -6,6 +6,7 @@ use serde::Serialize;
 use crate::{
     AppData,
     schema::{
+        Db,
         clusters::table
     },
     error_msg
@@ -18,8 +19,7 @@ pub enum Reply {
     Err { error: String }
 }
 
-pub fn post_cluster(data: Data<AppData>) -> Result<i32, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn post_cluster(db: &mut Db) -> Result<i32, String> {
     let sql = vec![
         "insert", "into", table::TABLE_NAME,
         "values", "(default)",
@@ -45,13 +45,19 @@ pub fn post_cluster(data: Data<AppData>) -> Result<i32, String> {
 }
 
 pub fn post(data: Data<AppData>) -> HttpResponse {
-    match error_msg!(post_cluster(data)) {
-        Ok(id) => {
-            return HttpResponse::Ok().json(Reply::Ok{ id });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(post_cluster(&mut db)) {
+            Ok(id) => {
+                return HttpResponse::Ok().json(Reply::Ok{ id });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 }

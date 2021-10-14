@@ -4,6 +4,7 @@ use crate::{
     AppData, 
     error_msg, 
     schema::{
+        Db,
         ParamIndexer,
         examples::{
             Row,
@@ -38,8 +39,7 @@ pub fn get_example_from_row(row: &PostgresRow) ->  Result<Row, String> {
     })
 }
 
-pub fn get_example(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn get_example(db: &mut Db, id: &i32) -> Result<Option<Row>, String> {
     let mut indexer = ParamIndexer::new();
     let sql = vec![
         "select", "*",
@@ -64,13 +64,19 @@ pub fn get_example(data: Data<AppData>, id: &i32) -> Result<Option<Row>, String>
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_example(data, &info.id)) {
-        Ok(example) => {
-            return HttpResponse::Ok().json(Reply::Ok{ example });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(get_example(&mut db, &info.id)) {
+            Ok(example) => {
+                return HttpResponse::Ok().json(Reply::Ok{ example });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

@@ -4,6 +4,7 @@ use crate::{
     AppData,
     error_msg, 
     schema::{
+        Db,
         Int,
         examples::{
             table as examples_table
@@ -27,7 +28,7 @@ pub struct Info {
 #[serde(untagged)]
 pub enum Reply {
     Ok {        
-        translation: Option<Translation>
+        data: Option<Translation>
     },
     Error {
         error: String
@@ -43,8 +44,7 @@ pub fn get_translation_from_row(row: &PostgresRow) -> Result<Row, String> {
     })
 }
 
-pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Translation>, String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn get_translation(db: &mut Db, id: &i32) -> Result<Option<Translation>, String> {
     let mut indexer = ParamIndexer::new();
     let sql = vec![
         "select", "*",
@@ -85,13 +85,19 @@ pub fn get_translation(data: &Data<AppData>, id: &i32) -> Result<Option<Translat
 }
 
 pub fn get(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(get_translation(&data, &info.id)) {
-        Ok(translation) => {
-            return HttpResponse::Ok().json(Reply::Ok{ translation });
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(get_translation(&mut db, &info.id)) {
+            Ok(data) => {
+                return HttpResponse::Ok().json(Reply::Ok{ data });
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

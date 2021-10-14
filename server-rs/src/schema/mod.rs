@@ -9,7 +9,7 @@ pub mod languages;
 pub mod translations;
 pub mod word_groups;
 
-type Db<'a> = MutexGuard<'a, Client>;
+pub type Db<'a> = MutexGuard<'a, Client>;
 pub type Int = i32;
 
 pub struct ParamIndexer {

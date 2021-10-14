@@ -3,6 +3,7 @@ use serde::{Deserialize};
 use crate::{
     AppData, 
     schema::{
+        Db,
         ParamIndexer,
         languages::{
             table
@@ -16,8 +17,7 @@ pub struct Info {
     id: i32
 }
 
-pub fn delete_lang(data: Data<AppData>, id: &i32) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn delete_lang(db: &mut Db, id: &i32) -> Result<(), String> {
     let mut indxer = ParamIndexer::new();
     let sql = vec![
         "delete", "from", table::TABLE_NAME,
@@ -30,13 +30,19 @@ pub fn delete_lang(data: Data<AppData>, id: &i32) -> Result<(), String> {
 }
 
 pub fn delete(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
-    match error_msg!(delete_lang(data, &info.id)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(delete_lang(&mut db, &info.id)) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }  
+    };
 }

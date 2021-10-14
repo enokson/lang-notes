@@ -8,12 +8,12 @@ use super::super::super::{
     AppData, schema,
 };
 use schema::{
+    Db,
     ParamIndexer,
     examples::{table, Row}
 };
 
-pub fn update_example(data: Data<AppData>, body: Json<Row>) -> Result<(), String> {
-    let mut db = error_msg!(data.db.try_lock())?;
+pub fn update_example(db: &mut Db, body: &Row) -> Result<(), String> {
     let mut indx = ParamIndexer::new();
     let updates = vec![
         "set", table::PARENT_TYPE, "=", &indx.next(),
@@ -32,13 +32,19 @@ pub fn update_example(data: Data<AppData>, body: Json<Row>) -> Result<(), String
 }
 
 pub fn update(data: Data<AppData>, body: Json<Row>) -> HttpResponse {
-    match error_msg!(update_example(data, body)) {
-        Ok(_) => {
-            return HttpResponse::Ok().finish();
+    match error_msg!(data.db.try_lock()) {
+        Ok(mut db) => match error_msg!(update_example(&mut db, &body.into_inner())) {
+            Ok(_) => {
+                return HttpResponse::Ok().finish();
+            },
+            Err(error) => {
+                println!("{}", error);
+                return HttpResponse::InternalServerError().finish();
+            }
         },
         Err(error) => {
             println!("{}", error);
             return HttpResponse::InternalServerError().finish();
         }
-    }
+    };
 }
