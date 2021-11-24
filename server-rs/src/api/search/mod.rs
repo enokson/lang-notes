@@ -30,9 +30,10 @@ pub struct Info {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[serde(untagged)]
 pub enum Reply {
     Ok {
-        clusters: Vec<Cluster>
+        data: Vec<Cluster>
     },
     Error {
         error: String
@@ -86,8 +87,8 @@ pub fn search_clusters(db: &mut Db, info: &Info) -> Result<Vec<Cluster>, String>
 pub fn search(data: Data<AppData>, info: Query<Info>) -> HttpResponse {
     match error_msg!(data.db.try_lock()) {
         Ok(mut db) => match error_msg!(search_clusters(&mut db, &info.into_inner())) {
-            Ok(clusters) => {
-                return HttpResponse::Ok().json(Reply::Ok{ clusters });
+            Ok(data) => {
+                return HttpResponse::Ok().json(Reply::Ok{ data });
             },
             Err(error) => {
                 println!("{}", error);
